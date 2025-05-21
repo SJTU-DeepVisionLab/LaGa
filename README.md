@@ -1,5 +1,5 @@
 # 3D Language Gaussians (LaGa)
-### [Project Page]() | [Arxiv Paper]() | [Data (Google Drive)](https://drive.google.com/file/d/1iiW3EyhiL10U_FCJ0esSrvnzZkHguQ7V/view?usp=share_link)
+### [Project Page]() | [Arxiv Paper]() 
 
 **Tackling View-Dependent Semantics in 3D Language Gaussian Splatting**
 
