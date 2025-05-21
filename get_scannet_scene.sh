@@ -1,0 +1,2 @@
+# densify_until_iter = -1 to disable 3D Gaussians densification, this script is used to convert the scannet point cloud to a 3D-GS scene
+CUDA_VISIBLE_DEVICES=0 python train_scene.py -s /data_hdd3/cenjiazhong/datasets/nerf_data/scannet/scene0000_00 --densify_until_iter -1
