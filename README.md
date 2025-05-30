@@ -77,6 +77,11 @@ Note: For dataset not designed for 3D Gaussian Splatting, you may need to run co
 
   Please follow instructions in inference.ipynb
 
+## GUI Usage
+To run the interactive GUI, you can use the following command:
+```bash
+python laga_gui.py -m <path to the pre-trained 3DGS model>
+```
 
 # TODO List
 - [✓] Add an interactive GUI. 
