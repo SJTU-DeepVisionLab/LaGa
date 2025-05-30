@@ -1,5 +1,5 @@
 # 3D Language Gaussians (LaGa)
-### [Project Page]() | [Arxiv Paper]() 
+### [Project Page](https://jumpat.github.io/laga-page/) | [Arxiv Paper]() 
 
 **Tackling View-Dependent Semantics in 3D Language Gaussian Splatting**
 
@@ -79,7 +79,7 @@ Note: For dataset not designed for 3D Gaussian Splatting, you may need to run co
 
 
 # TODO List
-- [ ] Add an interactive GUI. 
+- [✓] Add an interactive GUI. 
 
 ## Acknowledgements
 Thanks for the following project for their valuable contributions:
