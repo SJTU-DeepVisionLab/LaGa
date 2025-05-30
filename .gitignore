@@ -2,6 +2,7 @@
 .vscode
 .ipynb_checkpoints
 output
+clip_ckpt
 visualization
 build
 data
