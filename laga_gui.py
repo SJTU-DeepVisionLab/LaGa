@@ -293,7 +293,7 @@ class GaussianSplattingGUI:
         self.new_click = False
         self.prompt_num = 0
         self.new_click_xy = []
-        self.clear_edit = False                 # clear all the click prompts
+        # self.clear_edit = False                 # clear all the click prompts
         self.roll_back = False
         self.preview = False    # binary segmentation mode
         self.segment3d_flag = False
@@ -312,6 +312,9 @@ class GaussianSplattingGUI:
         self.cosine_filter, self.postprocess = True, True
         self.do_infer = False
         self.relevance, self.cosines, self.filtered_relevance = None, None, None
+        self.selected_layer = 0
+        
+        self.mask_3d = None
         
     def __del__(self):
         dpg.destroy_context()
@@ -378,8 +381,8 @@ class GaussianSplattingGUI:
         #     self.clickmode_multi_button = dpg.get_value(sender)
         #     print("clickmode_multi_button = ", self.clickmode_multi_button)
             # print("binary_threshold_button = ", self.binary_threshold_button)
-        def clear_edit():
-            self.clear_edit = True
+        # def clear_edit():
+        #     self.clear_edit = True
         def roll_back():
             self.roll_back = True
         def do_infer():
@@ -390,15 +393,14 @@ class GaussianSplattingGUI:
             self.save_flag = True
         def callback_reload():
             self.reload_flag = True
-        # def callback_cluster():
-            # self.cluster_in_3D_flag =True
+
         def callback_reshuffle_color():
             self.label_to_color = np.random.rand(1000, 3)
-            try:
-                self.cluster_point_colors = self.label_to_color[self.seg_score.argmax(dim = -1).cpu().numpy()]
-                self.cluster_point_colors[self.seg_score.max(dim = -1)[0].detach().cpu().numpy() < 0.5] = (0,0,0)
-            except:
-                pass
+            # try:
+            #     self.cluster_point_colors = self.label_to_color[self.seg_score.argmax(dim = -1).cpu().numpy()]
+            #     self.cluster_point_colors[self.seg_score.max(dim = -1)[0].detach().cpu().numpy() < 0.5] = (0,0,0)
+            # except:
+            #     pass
 
         def render_mode_rgb_callback(sender):
             self.render_mode_rgb = not self.render_mode_rgb
@@ -445,12 +447,15 @@ class GaussianSplattingGUI:
 
             dpg.add_checkbox(label="RELEVANCE", callback=render_mode_similarity_callback, user_data="Some Data")
             dpg.add_checkbox(label="DECOMPOSITION", callback=render_mode_cluster_callback, user_data="Some Data")
-            dpg.add_radio_button(
-                    items=[f"Layer {i}" for i in range(self.opt.NUM_LVL)],
-                    default_value="Layer 0",
-                    callback=layer_select_callback,
-                    tag="radio_selector"
-                )
+            with dpg.group(indent=50):
+                dpg.add_radio_button(
+                        items=[f"Layer {i}" for i in range(self.opt.NUM_LVL)],
+                        default_value="Layer 0",
+                        callback=layer_select_callback,
+                        tag="radio_selector"
+                    )
+            dpg.add_button(label="reshuffle_cluster_color", callback=callback_reshuffle_color, user_data="Some Data")
+            
             # dpg.add_text("\nSegment option: ", tag="seg")
             # dpg.add_checkbox(label="clickmode", callback=clickmode_callback, user_data="Some Data")
             # dpg.add_checkbox(label="multi-clickmode", callback=clickmode_multi_callback, user_data="Some Data")
@@ -459,7 +464,7 @@ class GaussianSplattingGUI:
             dpg.add_text("\n")
             dpg.add_button(label="segment3d", callback=callback_segment3d, user_data="Some Data")
             dpg.add_button(label="roll_back", callback=roll_back, user_data="Some Data")
-            dpg.add_button(label="clear", callback=clear_edit, user_data="Some Data")
+            # dpg.add_button(label="clear", callback=clear_edit, user_data="Some Data")
             dpg.add_button(label="save as", callback=callback_save, user_data="Some Data")
             dpg.add_input_text(label="", default_value="precomputed_mask", tag="save_name")
             dpg.add_text("\n")
@@ -504,10 +509,8 @@ class GaussianSplattingGUI:
         def toggle_moving_left():
             self.moving = not self.moving
 
-
         def toggle_moving_middle():
             self.moving_middle = not self.moving_middle
-
 
         def move_handler(sender, pos, user):
             if self.moving and dpg.is_item_focused("_primary_window"):
@@ -605,22 +608,17 @@ class GaussianSplattingGUI:
         )
         cam.feature_height, cam.feature_width = self.height, self.width
         return cam
-    
-    def cluster_in_3D(self):
-        pass
-
 
     @torch.no_grad()
     def fetch_data(self, view_camera):
         
         scene_outputs = render(view_camera, self.engine['scene'], self.opt, self.bg_color)
-        # feature_outputs = render_contrastive_feature(view_camera, self.engine['feature'], self.opt, self.bg_feature)
-        # if self.cluster_in_3D_flag:
-            # self.cluster_in_3D_flag = False
-            # print("Clustering in 3D...")
-            # self.cluster_in_3D()
-            # print("Clustering finished.")
-        # self.rendered_cluster = None if self.cluster_point_colors is None else render(view_camera, self.engine['scene'], self.opt, self.bg_color, override_color=torch.from_numpy(self.cluster_point_colors).cuda().float())["render"].permute(1, 2, 0)
+
+        self.rendered_cluster = None
+        
+        if self.cluster_point_colors is not None and self.engine['scene']._xyz.shape[0] == self.cluster_point_colors.shape[0]:
+            self.rendered_cluster = render(view_camera, self.engine['scene'], self.opt, self.bg_color, override_color=torch.from_numpy(self.cluster_point_colors).cuda().float())["render"].permute(1, 2, 0)
+
         # --- RGB image --- #
         img = scene_outputs["render"].permute(1, 2, 0)  #
 
@@ -639,15 +637,15 @@ class GaussianSplattingGUI:
         # scale_gated_feat = sems * self.gates.unsqueeze(0).unsqueeze(0)
         # scale_gated_feat = torch.nn.functional.normalize(scale_gated_feat, dim = -1, p = 2)
         
-        if self.clear_edit:
-            self.new_click_xy = []
-            self.clear_edit = False
-            self.prompt_num = 0
-            try:
-                self.engine['scene'].clear_segment()
-                self.engine['feature'].clear_segment()
-            except:
-                pass
+        # if self.clear_edit:
+        #     # self.new_click_xy = []
+        #     self.clear_edit = False
+        #     self.prompt_num = 0
+        #     try:
+        #         self.engine['scene'].clear_segment()
+        #         self.engine['feature'].clear_segment()
+        #     except:
+        #         pass
 
         if self.roll_back:
             self.new_click_xy = []
@@ -655,7 +653,7 @@ class GaussianSplattingGUI:
             self.prompt_num = 0
             # try:
             self.engine['scene'].roll_back()
-            self.engine['feature'].roll_back()
+            # self.engine['feature'].roll_back()
             # except:
                 # pass
         
@@ -664,11 +662,8 @@ class GaussianSplattingGUI:
             print("loading model file...")
             self.engine['scene'].load_ply(self.opt.SCENE_PCD_PATH)
             self.engine['feature'].load_ply(self.opt.FEATURE_PCD_PATH)
-            # self.engine['scale_gate'].load_state_dict(torch.load(self.opt.SCALE_GATE_PATH))
-            # self.do_pca()   # calculate self.proj_mat
             self.load_model = True
 
-        # if dpg.get_value('prompt') != "":
         if self.do_infer:
             self.do_infer = False
             self.relevance, self.cosines = self.do_inference(dpg.get_value('prompt'), postprocess=self.postprocess)
@@ -679,72 +674,24 @@ class GaussianSplattingGUI:
                 self.filtered_relevance[(self.cosines < 0.23).squeeze().cpu().numpy(), :] = 0
         
         score_map = None
-        if len(self.new_click_xy) > 0:
-            pass
-            # # featmap = scale_gated_feat.reshape(H, W, -1)
-            
-            # if self.new_click:
-            #     xy = self.new_click_xy
-            #     new_feat = featmap[int(xy[1])%H, int(xy[0])%W, :].reshape(featmap.shape[-1], -1)
-            #     if (self.prompt_num == 0) or (self.clickmode_multi_button == False):
-            #         self.chosen_feature = new_feat
-            #     else:
-            #         self.chosen_feature = torch.cat([self.chosen_feature, new_feat], dim=-1)    # extend to get more prompt features
-            #     self.prompt_num += 1
-            #     self.new_click = False
-            
-            # score_map = featmap @ self.chosen_feature
-            # # print(score_map.shape, score_map.min(), score_map.max(), "score_map_shape")
-
-            # score_map = (score_map + 1.0) / 2
-            # score_binary = score_map > dpg.get_value('_ScoreThres')
-            
-            # score_map[~score_binary] = 0.0
-            # score_map = torch.max(score_map, dim=-1).values
-            # score_norm = (score_map - dpg.get_value('_ScoreThres')) / (1 - dpg.get_value('_ScoreThres'))
-
-            
-            # depth_score = 1 - torch.clip(score_norm, 0, 1)
-            # depth_score = depth2img(depth_score.cpu().numpy()).astype(np.float32)/255.0
 
         if self.segment3d_flag:
-            # """ gaussian point cloud core params
-            # self.engine._xyz            # (N, 3)
-            # self.engine._features_dc    # (N, 1, 3)
-            # self.engine._features_rest  # (N, 15, 3)
-            # self.engine._opacity        # (N, 1)
-            # self.engine._scaling        # (N, 3)
-            # self.engine._rotation       # (N, 4)
-            # self.engine._objects_dc     # (N, 1, 16)
-            # """
-            # self.segment3d_flag = False
-            # feat_pts = self.engine['feature'].get_point_features.squeeze()
-            # scale_gated_feat_pts = feat_pts * self.gates.unsqueeze(0)
-            # scale_gated_feat_pts = torch.nn.functional.normalize(scale_gated_feat_pts, dim = -1, p = 2)
-
-            # score_pts = scale_gated_feat_pts @ self.chosen_feature
-            # score_pts = (score_pts + 1.0) / 2
-            # self.score_pts_binary = (score_pts > dpg.get_value('_ScoreThres')).sum(1) > 0
-
-            # # save_path = "./debug_robot_{:0>3d}.ply".format(self.object_seg_id)
-            # # try:
-            # #     self.engine['scene'].roll_back()
-            # #     self.engine['feature'].roll_back()
-            # # except:
-            # #     pass
-            # self.engine['scene'].segment(self.score_pts_binary)
-            # self.engine['feature'].segment(self.score_pts_binary)
-            pass
-        if self.save_flag:
-            print("Saving ...")
-            self.save_flag = False
-            try:
-                os.makedirs("./segmentation_res", exist_ok=True)
-                save_mask = self.engine['scene']._mask == self.engine['scene'].segment_times + 1
-                torch.save(save_mask, f"./segmentation_res/{dpg.get_value('save_name')}.pt")
-            except:
-                with dpg.window(label="Tips"):
-                    dpg.add_text('You should segment the 3D object before save it (click segment3d first).')
+            self.segment3d_flag = False
+            scores_3d = None
+            
+            if self.cosine_filter and self.filtered_relevance is not None:
+                scores_3d = self.filtered_relevance
+            elif self.relevance is not None:
+                scores_3d = self.relevance
+            else:
+                pass
+            
+            if scores_3d is not None:
+                self.mask_3d = torch.from_numpy(scores_3d[:,0] > dpg.get_value('_ScoreThres')).cuda()
+                self.engine['scene'].roll_back()
+                # self.engine['feature'].roll_back()
+                self.engine['scene'].segment(self.mask_3d)
+                # self.engine['feature'].segment(self.mask_3d)
 
         self.render_buffer = None
         render_num = 0
@@ -755,11 +702,11 @@ class GaussianSplattingGUI:
         
         if self.render_mode_cluster:
             
-            
             selected_layer = self.selected_layer
             
             seg_score = self.engine['seg_scores'][selected_layer]
-            # multi_lvl_seg_scores[selected_layer]
+            
+            self.cluster_point_colors = self.label_to_color[seg_score.argmax(dim = -1).cpu().numpy()]
             
             if self.rendered_cluster is None:
                 self.render_buffer = rgb_score.cpu().numpy().reshape(-1) if self.render_buffer is None else self.render_buffer + rgb_score.cpu().numpy().reshape(-1)
@@ -818,17 +765,28 @@ class GaussianSplattingGUI:
                     
                     score_map = render_res  # (H, W, 3)
                 
-                self.render_buffer = self.render_buffer * (score_map > dpg.get_value('_ScoreThres')).cpu().numpy().reshape(-1).astype(np.float32)
+                self.render_buffer = self.render_buffer * (score_map > 0.2).cpu().numpy().reshape(-1).astype(np.float32)
                 render_num = 1
                 
         self.render_buffer /= render_num
 
         dpg.set_value("_texture", self.render_buffer)
         
+        if self.save_flag:
+            print("Saving ...")
+            self.save_flag = False
+
+            if self.mask_3d is None:
+                with dpg.window(label="Tips"):
+                    dpg.add_text('You should segment the 3D object before save it (click segment3d first).')
+            else:
+                os.makedirs("./segmentation_res", exist_ok=True)
+                torch.save(self.mask_3d, f"./segmentation_res/{dpg.get_value('save_name')}.pt")
+
     @torch.no_grad()
     def do_inference(self, prompt, postprocess=True):
         # Not all scene can apply this. Some scenes are too large.
-        
+        self.engine['scene'].roll_back()
         if postprocess:
             if self.gaussian_colors is None:
                 from utils.sh_utils import SH2RGB
