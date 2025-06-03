@@ -78,10 +78,23 @@ Note: For dataset not designed for 3D Gaussian Splatting, you may need to run co
   Please follow instructions in inference.ipynb
 
 ## GUI Usage
-To run the interactive GUI, you can use the following command:
+
+<img src="assets/laga-gui-usage.png" width="1000">
+
+Before running the GUI, make sure you have trained the 3D Gaussian Splatting model and the affinity features as described above. Moreover, you should extract the essential scene decomposition information and semantic descriptors with inference.ipynb. Then, you can run the GUI to visualize and interact with the 3D scene and its semantic segmentation:
+
 ```bash
-python laga_gui.py -m <path to the pre-trained 3DGS model>
+python laga_gui.py -m <path to the pre-trained 3DGS model> --scene_iteration 30000 --feature_iteration 30000
 ```
+
+Note that the `--scene_iteration` and `--feature_iteration` arguments should match the iterations used during training.
+
+1. Use the mouse to rotate, zoom, and pan the 3D scene.
+2. Type a text prompt in the input box, and click 'Do Inference' to query LaGa.
+3. You can disable the 'Postprocess' to reduce GPU memory consumption.
+4. 'ScoreThres' is used to segment the objects with a relevance score higher than the threshold (click 'preview_segmentation_in_2d' and 'segment3d' to show the segmentation results).
+5. In 'Render option', the 'RGB' denotes the rendered RGB image, 'RELEVANCE' is the relevance score with the given text prompt and 'DECOMPOSITION' is the scene decomposition result.
+6. Click 'Save as' to save the segmentatio results. Before that, you should click 'segment3d' first.
 
 # TODO List
 - [✓] Add an interactive GUI. 
